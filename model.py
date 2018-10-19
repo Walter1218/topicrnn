@@ -111,9 +111,11 @@ class Train(object):
   def batch_train(self, sess, inputs):
     keys = list(self.outputs_train.keys())
     outputs = [self.outputs_train[key] for key in keys]
-    outputs = sess.run([self.train_op, self.summary] + outputs, feed_dict={self.inputs[k]: inputs[k] for k in self.inputs.keys()})
-    ret = {keys[i]: outputs[i+2] for i in range(len(keys))}
-    ret["summary"] = outputs[1]
+    outputs = sess.run([self.train_op, self.global_step, self.summary] + outputs, feed_dict={self.inputs[k]: inputs[k] for k in self.inputs.keys()})
+    ret = {keys[i]: outputs[i+3] for i in range(len(keys))}
+    ret["global_step"] = outputs[1]
+    ret["summary"] = outputs[2]
+
     return ret
 
   def batch_test(self, sess, inputs):
@@ -135,7 +137,7 @@ class Train(object):
       train_theta.append(train_outputs["theta"])
       train_repre.append(train_outputs["repre"])
       train_label.append(batch["label"])
-      self.writer.add_summary(train_outputs["summary"])
+      self.writer.add_summary(train_outputs["summary"], train_outputs["global_step"])
       #print(train_outputs)
       
     for batch in dataset_dev():
