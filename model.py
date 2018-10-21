@@ -15,9 +15,10 @@ class TopicRNN(object):
   def forward(self, inputs, mode="Train"):
     # build inference network
     infer_logits = tf.layers.dense(inputs["frequency"], units=self.num_hidden, activation=tf.nn.relu)
+    infer_logits = tf.layers.dense(infer_logits, units=self.num_hidden, activation=tf.nn.relu)
     infer_mean = tf.layers.dense(infer_logits, units=self.num_topics)
     infer_logvar = tf.layers.dense(infer_logits, units=self.num_topics)
-    pst_dist = tf.distributions.Normal(loc=infer_mean, scale=infer_logvar * infer_logvar)
+    pst_dist = tf.distributions.Normal(loc=infer_mean, scale=tf.exp(infer_logvar))
     pri_dist = tf.distributions.Normal(loc=tf.zeros_like(infer_mean), scale=tf.ones_like(infer_logvar))
     theta = pst_dist.sample()
     
@@ -28,8 +29,8 @@ class TopicRNN(object):
     cell = tf.nn.rnn_cell.MultiRNNCell(cells)
     rnn_outputs, final_output = tf.nn.dynamic_rnn(cell, inputs=emb, sequence_length=inputs["length"], dtype=tf.float32)
 
-    token_logits = tf.layers.dense(rnn_outputs, units=self.vocab_size) + \
-        tf.layers.dense(tf.expand_dims(theta, 1), units=self.vocab_size) * \
+    token_logits = tf.layers.dense(rnn_outputs, units=self.vocab_size, use_bias=False) + \
+        tf.layers.dense(tf.expand_dims(theta, 1), units=self.vocab_size, use_bias=False) * \
         tf.to_float(tf.expand_dims(1 - inputs["indicators"], 2))
 
     token_loss = tf.contrib.seq2seq.sequence_loss(logits=token_logits,
@@ -39,6 +40,7 @@ class TopicRNN(object):
         average_across_batch=False,
         name="token_loss")
     token_loss = token_loss * tf.to_float(tf.sequence_mask(inputs["length"]))
+    token_ppl = tf.exp(tf.reduce_sum(token_loss) / (1e-3 + tf.to_float(tf.reduce_sum(inputs["length"]))))
     token_loss = tf.reduce_mean(tf.reduce_sum(token_loss, axis=1))
     
     indicator_logits = tf.squeeze(tf.layers.dense(rnn_outputs,  units=1), axis=2)
@@ -51,15 +53,17 @@ class TopicRNN(object):
     kl_loss = tf.contrib.distributions.kl_divergence(pst_dist, pri_dist)
     kl_loss = tf.reduce_mean(tf.reduce_sum(kl_loss, axis=1), axis=0)
 
-    total_loss = token_loss + indicator_loss + kl_loss
+    total_loss = token_loss + indicator_loss + 1e-2 * kl_loss
 
     tf.summary.scalar(tensor=token_loss, name="token_loss")
     tf.summary.scalar(tensor=indicator_loss, name="indicator_loss")
     tf.summary.scalar(tensor=kl_loss, name="kl_loss")
     tf.summary.scalar(tensor=total_loss, name="total_loss")
+    tf.summary.scalar(tensor=token_ppl, name="ppl")
 
     outputs = {
         "token_loss": token_loss,
+        "token_ppl": token_ppl,
         "indicator_loss": indicator_loss,
         "kl_loss": kl_loss,
         "loss": total_loss,
@@ -100,12 +104,14 @@ class Train(object):
     # train output
     with tf.variable_scope('topicrnn'):
       self.outputs_train = model.forward(self.inputs, mode="Train")
-
-    with tf.variable_scope('topicrnn', reuse=True):
-      self.outputs_test  = model.forward(self.inputs, mode="Test")
+      self.outputs_test  = self.outputs_train #same here
 
     self.summary = tf.summary.merge_all()
-    self.train_op  = tf.train.AdamOptimizer(learning_rate=self.params["learning_rate"]).minimize(self.outputs_train["loss"], global_step=self.global_step)
+    grads = tf.gradients(self.outputs_train["loss"], tf.trainable_variables())
+    grads = [tf.clip_by_value(g, -10.0, 10.0) for g in grads]
+    grads, _ = tf.clip_by_global_norm(grads, 20.0)
+    optimizer = tf.train.AdamOptimizer(learning_rate=self.params["learning_rate"])
+    self.train_op = optimizer.apply_gradients(zip(grads, tf.trainable_variables()), global_step=self.global_step)
     self.saver = tf.train.Saver(tf.global_variables(), max_to_keep=1)
 
   def batch_train(self, sess, inputs):

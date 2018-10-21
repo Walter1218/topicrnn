@@ -22,7 +22,7 @@ parser.add_argument("--num_hidden", type=int, default=500, help="hidden units of
 parser.add_argument("--dim_emb", type=int, default=300, help="dimension of embedding")
 parser.add_argument("--num_topics", type=int, default=200, help="number of topics")
 parser.add_argument("--num_layers", type=int, default=2, help="number of layers")
-parser.add_argument("--learning_rate", type=float, default=3e-4, help="learning rate")
+parser.add_argument("--learning_rate", type=float, default=1e-3, help="learning rate")
 parser.add_argument("--init_from", type=str, default=None, help="init_from")
 parser.add_argument("--save_dir", type=str, default="results", help="dir for saving the model")
 
@@ -58,7 +58,7 @@ def load_dataset(params):
   valid_x, valid_y = get_xy("valid.data.idx")
   test_x, test_y = get_xy("test.data.idx")
   train_x = labeled_x + unlabeled_x
-  train_y = labeled_y + [2] * len(unlabeled_y)
+  train_y = labeled_y + [-1] * len(unlabeled_y)
 
   vocab = {k: vocab[k] for k in vocab if vocab[k] < params.vocab_size}
   stop_words_ids = set([vocab[k] for k in stop_words if k in vocab])
@@ -130,6 +130,8 @@ def main():
   data_train = iterator(data_train, stop_words_ids, params)
   data_valid = iterator(data_valid, stop_words_ids, params)
   data_test = iterator(data_test, stop_words_ids, params)
+
+  os.system("cp -r *.py " + params.save_dir)
 
   #for x in data_train():
     #print(x)
