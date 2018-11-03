@@ -4,13 +4,14 @@ import numpy as np
 import pickle as pkl
 
 class TopicRNN(object):
-  def __init__(self, num_units, dim_emb, vocab_size, num_topics, num_hidden, num_layers):
+  def __init__(self, num_units, dim_emb, vocab_size, num_topics, num_hidden, num_layers, stop_words):
     self.num_units = num_units
     self.dim_emb = dim_emb
     self.num_topics = num_topics
     self.num_hidden = num_hidden
     self.num_layers = num_layers
     self.vocab_size = vocab_size
+    self.stop_words = stop_words # vocab size of 01, 1 = stop_words
 
   def forward(self, inputs, mode="Train"):
     # build inference network
@@ -31,7 +32,7 @@ class TopicRNN(object):
 
     token_logits = tf.layers.dense(rnn_outputs, units=self.vocab_size, use_bias=False) + \
         tf.layers.dense(tf.expand_dims(theta, 1), units=self.vocab_size, use_bias=False) * \
-        tf.to_float(tf.expand_dims(1 - inputs["indicators"], 2))
+        tf.to_float(1 - self.stop_words)
 
     token_loss = tf.contrib.seq2seq.sequence_loss(logits=token_logits,
         targets=inputs["targets"],
@@ -53,7 +54,7 @@ class TopicRNN(object):
     kl_loss = tf.contrib.distributions.kl_divergence(pst_dist, pri_dist)
     kl_loss = tf.reduce_mean(tf.reduce_sum(kl_loss, axis=1), axis=0)
 
-    total_loss = token_loss + indicator_loss + 1e-2 * kl_loss
+    total_loss = token_loss + indicator_loss + 1 * kl_loss
 
     tf.summary.scalar(tensor=token_loss, name="token_loss")
     tf.summary.scalar(tensor=indicator_loss, name="indicator_loss")
@@ -99,6 +100,7 @@ class Train(object):
         num_topics = self.params["num_topics"],
         num_layers = self.params["num_layers"],
         num_hidden = self.params["num_hidden"],
+        stop_words = self.params["stop_words"],
         )
 
     # train output

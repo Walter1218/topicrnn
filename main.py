@@ -130,6 +130,7 @@ def main():
   data_train = iterator(data_train, stop_words_ids, params)
   data_valid = iterator(data_valid, stop_words_ids, params)
   data_test = iterator(data_test, stop_words_ids, params)
+  params.stop_words = np.asarray([1 if i in stop_words_ids else 0 for i in range(params.vocab_size)])
 
   os.system("cp -r *.py " + params.save_dir)
 

@@ -10,7 +10,8 @@ def load_data(filename):
   train_data = train_data[1:]
   valid_data = valid_data[1:]
   test_data = test_data[1:]
-
+  
+  print(train_data[0].shape)
   dim_theta = train_data[0].shape[1]
   dim_repre = train_data[1].shape[1]
 
@@ -21,9 +22,9 @@ def load_data(filename):
     test_data[2] = test_data[2].flatten()
   
   num_labels = len(set(test_data[2].tolist()))
-  train_data = [train_data[0][train_data[2] < num_labels, :], \
-      train_data[1][train_data[2] < num_labels, :], \
-      train_data[2][train_data[2] < num_labels]]
+  train_data = [train_data[0][0 <= train_data[2], :], \
+      train_data[1][0 <= train_data[2], :], \
+      train_data[2][0 <= train_data[2]]]
 
   return train_data, valid_data, test_data, dim_theta, dim_repre, num_labels
 
